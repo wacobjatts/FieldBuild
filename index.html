@@ -10,156 +10,146 @@
 <body>
 
     <div id="master-site" class="master-container">
-        
         <header class="toolbar">
             <div class="toolbar-top">
                 <div class="brand">
                     <span class="brand-name">FIELDBUILDER</span>
-                    <div id="status-indicator" class="status-pill">DRAFT SAVED</div>
+                    <div id="status-indicator" class="status-pill">READY</div>
                 </div>
                 <div class="toolbar-actions">
-                    <button id="btn-export" class="btn-subtle">EXPORT ZIP</button>
+                    <button id="btn-copy-all" class="btn-subtle">COPY ALL</button>
                     <button id="btn-menu" class="btn-icon">MENU</button>
                 </div>
             </div>
             
-            <div class="toolbar-controls">
-                <div class="toggle-group">
-                    <button id="toggle-sandbox" class="toggle-btn">SANDBOX OFF</button>
-                    <button id="toggle-lock" class="toggle-btn">EDITING</button>
-                </div>
-                <div class="main-actions">
-                    <button id="btn-save-stable" class="btn-primary">SAVE STABLE</button>
-                </div>
+            <div class="quick-action-bar">
+                <button id="btn-save-stable-quick" class="qa-btn">STABLE</button>
+                <button id="btn-snapshot-quick" class="qa-btn">SNAP</button>
+                <button id="toggle-sandbox" class="qa-btn">SANDBOX</button>
+                <button id="btn-export-quick" class="qa-btn">ZIP</button>
+                <button id="btn-repair-quick" class="qa-btn">REPAIR</button>
             </div>
         </header>
 
         <main class="build-area">
-            
-            <section class="curtain" data-section="ai">
-                <button class="curtain-trigger">GENERATE WITH AI</button>
+            <section class="curtain" data-section="search">
+                <button class="curtain-trigger">SEARCH & NAVIGATION</button>
                 <div class="curtain-content">
-                    <div class="control-row">
-                        <select id="ai-preset" class="input-select">
-                            <option value="">Select a Preset...</option>
-                            <option value="Build a subtle tron hero section">Tron Hero Section</option>
-                            <option value="Create a cyan bordered dashboard card">Dashboard Card</option>
-                            <option value="Build a mobile nav with clear tap targets">Mobile Nav</option>
-                            <option value="Repair spacing and hierarchy">Repair Spacing</option>
-                        </select>
-                        <select id="ai-model" class="input-select">
-                            <option>Gemini 1.5 Pro</option>
-                            <option>FieldAI Specialized</option>
-                        </select>
+                    <div class="search-container">
+                        <input type="text" id="global-search" placeholder="Search code or snippets...">
+                        <div id="search-results" class="search-results-panel"></div>
                     </div>
-                    <textarea id="ai-prompt" placeholder="Describe what you want to build..."></textarea>
-                    <button id="btn-generate" class="btn-ai">GENERATE STRUCTURE</button>
                 </div>
             </section>
 
-            <section class="curtain" data-section="html">
+            <section class="curtain active" data-section="html">
                 <button class="curtain-trigger">HTML</button>
                 <div class="curtain-content">
-                    <textarea id="editor-html" spellcheck="false" class="code-editor"></textarea>
+                    <div class="editor-wrapper">
+                        <div class="line-numbers" id="ln-html"></div>
+                        <textarea id="editor-html" spellcheck="false" class="code-editor"></textarea>
+                    </div>
                 </div>
             </section>
 
             <section class="curtain" data-section="css">
                 <button class="curtain-trigger">CSS</button>
                 <div class="curtain-content">
-                    <textarea id="editor-css" spellcheck="false" class="code-editor"></textarea>
+                    <div class="editor-wrapper">
+                        <div class="line-numbers" id="ln-css"></div>
+                        <textarea id="editor-css" spellcheck="false" class="code-editor"></textarea>
+                    </div>
                 </div>
             </section>
 
             <section class="curtain" data-section="js">
                 <button class="curtain-trigger">JS</button>
                 <div class="curtain-content">
-                    <textarea id="editor-js" spellcheck="false" class="code-editor"></textarea>
+                    <div class="editor-wrapper">
+                        <div class="line-numbers" id="ln-js"></div>
+                        <textarea id="editor-js" spellcheck="false" class="code-editor"></textarea>
+                    </div>
                 </div>
             </section>
 
-            <section class="curtain" data-section="search">
-                <button class="curtain-trigger">SEARCH / REPAIR</button>
+            <section class="curtain" data-section="snippets">
+                <button class="curtain-trigger">COMPONENTS / SNIPPETS</button>
                 <div class="curtain-content">
-                    <div class="search-bar">
-                        <input type="text" id="search-input" placeholder="Search keywords or components...">
-                    </div>
-                    <div class="tool-grid">
-                        <button class="tool-btn" data-insert="navbar">Navbar</button>
-                        <button class="tool-btn" data-insert="hero">Hero</button>
-                        <button class="tool-btn" data-insert="card">Card</button>
-                        <button class="tool-btn" id="btn-repair-now">REPAIR NOW</button>
-                    </div>
-                    <div class="toggle-row">
-                        <span>Auto Repair</span>
-                        <button id="toggle-auto-repair" class="toggle-btn mini">OFF</button>
-                    </div>
+                    <button id="btn-save-snippet" class="btn-primary">SAVE CURRENT AS SNIPPET</button>
+                    <div id="snippet-library" class="snippet-grid"></div>
                 </div>
             </section>
 
             <section class="curtain" data-section="scope">
-                <button class="curtain-trigger">SCOPE / CHECKLIST</button>
+                <button class="curtain-trigger">PROJECT SCOPE</button>
                 <div class="curtain-content">
-                    <div id="scope-list" class="checklist">
-                        </div>
-                    <div class="input-group">
-                        <input type="text" id="new-scope-item" placeholder="Add task...">
+                    <div class="scope-columns">
+                        <div class="scope-col" data-status="todo"><h4>Todo</h4><div class="items"></div></div>
+                        <div class="scope-col" data-status="doing"><h4>In Progress</h4><div class="items"></div></div>
+                        <div class="scope-col" data-status="done"><h4>Done</h4><div class="items"></div></div>
+                    </div>
+                    <div class="scope-input">
+                        <input type="text" id="scope-new-val" placeholder="New objective...">
                         <button id="btn-add-scope">+</button>
                     </div>
                 </div>
             </section>
 
-            <section class="curtain" data-section="versions">
-                <button class="curtain-trigger">VERSIONS / SNAPSHOTS</button>
+            <section class="curtain" data-section="notes">
+                <button class="curtain-trigger">NOTES / INTENT</button>
                 <div class="curtain-content">
-                    <div class="version-actions">
-                        <button id="btn-snapshot" class="btn-subtle">TAKE SNAPSHOT</button>
-                        <button id="btn-restore-stable" class="btn-subtle">RESTORE STABLE</button>
-                    </div>
-                    <div id="snapshot-list" class="snapshot-history">
-                        </div>
+                    <textarea id="note-intent" placeholder="Why are you making these changes?"></textarea>
+                    <textarea id="note-free" placeholder="General scratchpad..."></textarea>
                 </div>
             </section>
 
+            <section class="curtain" data-section="versions">
+                <button class="curtain-trigger">VERSIONS & COMPARE</button>
+                <div class="curtain-content">
+                    <div class="version-controls">
+                        <button id="btn-view-changes" class="btn-subtle">VIEW CHANGES</button>
+                    </div>
+                    <div id="snapshot-list" class="snapshot-history"></div>
+                </div>
+            </section>
         </main>
 
-        <div class="history-log" id="action-history">
-            <div class="log-entry">Session started.</div>
-        </div>
+        <div id="guide-toast" class="guide-toast hidden"></div>
+        <div class="history-log" id="action-history"></div>
     </div>
 
     <div id="experiment-site" class="preview-sheet collapsed">
         <div class="preview-handle" id="preview-drag-handle">
             <div class="handle-bar"></div>
             <div class="handle-labels">
-                <span id="preview-status">PREVIEW OK</span>
+                <span id="preview-status-pill" class="p-status">PREVIEW OK</span>
                 <span class="pull-text">PULL TO EXPAND</span>
             </div>
         </div>
         <div class="preview-toolbar">
-            <button id="btn-focus-mode" class="btn-subtle">FOCUS MODE</button>
+            <button id="btn-focus-mode" class="btn-subtle">FULL FOCUS</button>
             <button id="btn-close-preview" class="btn-subtle">CLOSE</button>
         </div>
         <div class="preview-body">
-            <iframe id="preview-iframe"></iframe>
+            <iframe id="preview-iframe" sandbox="allow-scripts allow-forms allow-modals allow-same-origin"></iframe>
         </div>
     </div>
 
     <div id="global-menu" class="menu-overlay hidden">
         <div class="menu-content">
-            <h2>WORKSPACE</h2>
-            <nav class="menu-nav">
-                <button class="menu-item" data-goto="ai">AI Generator</button>
-                <button class="menu-item" data-goto="versions">Snapshots</button>
-                <button class="menu-item" data-goto="scope">Project Scope</button>
-                <button class="menu-item">Settings</button>
-                <button class="menu-item" id="menu-export">Export ZIP</button>
-            </nav>
-            <button id="btn-menu-close" class="btn-primary">CLOSE</button>
+            <h3>MASTER ACTIONS</h3>
+            <div class="menu-grid">
+                <button id="m-copy-html">Copy HTML</button>
+                <button id="m-copy-css">Copy CSS</button>
+                <button id="m-copy-js">Copy JS</button>
+                <hr>
+                <button id="m-repair-toggle">Auto-Repair: OFF</button>
+                <button id="m-export-single">Export Single HTML</button>
+            </div>
+            <button id="btn-menu-close" class="btn-primary">BACK</button>
         </div>
     </div>
 
     <script src="script.js"></script>
 </body>
 </html>
-
