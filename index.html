@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FIELDBUILDER</title>
+    <title>FIELDBUILDER // CORE</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
@@ -14,38 +14,38 @@
             <div class="toolbar-top">
                 <div class="brand">
                     <span class="brand-name">FIELDBUILDER</span>
-                    <div id="status-indicator" class="status-pill">READY</div>
+                    <div id="status-indicator" class="status-pill">SYSTEM READY</div>
                 </div>
                 <div class="toolbar-actions">
                     <button id="btn-copy-all" class="btn-subtle">COPY ALL</button>
                     <button id="btn-menu" class="btn-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                     </button>
                 </div>
             </div>
             
             <div class="quick-action-bar">
-                <button id="btn-save-stable-quick" class="qa-btn">STABLE</button>
-                <button id="btn-snapshot-quick" class="qa-btn">SNAP</button>
-                <button id="toggle-sandbox" class="qa-btn">SANDBOX</button>
-                <button id="btn-export-quick" class="qa-btn">ZIP</button>
-                <button id="btn-repair-quick" class="qa-btn">REPAIR</button>
+                <button id="btn-save-stable-quick" class="qa-btn">SAVE STABLE</button>
+                <button id="btn-snapshot-quick" class="qa-btn">SNAPSHOT</button>
+                <button id="toggle-sandbox" class="qa-btn">SANDBOX MODE</button>
+                <button id="btn-export-quick" class="qa-btn">EXPORT ZIP</button>
+                <button id="btn-repair-quick" class="qa-btn">AUTO-REPAIR</button>
             </div>
         </header>
 
         <main class="build-area">
             <section class="curtain" data-section="search">
-                <button class="curtain-trigger">SEARCH & NAVIGATION</button>
+                <button class="curtain-trigger">GLOBAL SEARCH</button>
                 <div class="curtain-content">
                     <div class="search-container">
-                        <input type="text" id="global-search" placeholder="Search code (e.g. 'class', 'function')...">
+                        <input type="text" id="global-search" placeholder="Find code across all layers...">
                         <div id="search-results" class="search-results-panel"></div>
                     </div>
                 </div>
             </section>
 
             <section class="curtain active" data-section="html">
-                <button class="curtain-trigger">HTML</button>
+                <button class="curtain-trigger">HTML STRUCTURE</button>
                 <div class="curtain-content">
                     <div class="editor-wrapper">
                         <div class="line-numbers" id="ln-html"></div>
@@ -55,7 +55,7 @@
             </section>
 
             <section class="curtain" data-section="css">
-                <button class="curtain-trigger">CSS</button>
+                <button class="curtain-trigger">CSS STYLING</button>
                 <div class="curtain-content">
                     <div class="editor-wrapper">
                         <div class="line-numbers" id="ln-css"></div>
@@ -65,7 +65,7 @@
             </section>
 
             <section class="curtain" data-section="js">
-                <button class="curtain-trigger">JS</button>
+                <button class="curtain-trigger">JS LOGIC</button>
                 <div class="curtain-content">
                     <div class="editor-wrapper">
                         <div class="line-numbers" id="ln-js"></div>
@@ -74,56 +74,17 @@
                 </div>
             </section>
 
-            <section class="curtain" data-section="snippets">
-                <button class="curtain-trigger">COMPONENTS / SNIPPETS</button>
-                <div class="curtain-content">
-                    <button id="btn-save-snippet" class="btn-primary" style="width: 100%; margin-bottom: 15px;">SAVE CURRENT AS SNIPPET</button>
-                    <div id="snippet-library" class="snippet-grid">
-                        <div class="empty-state">No snippets saved yet.</div>
-                    </div>
-                </div>
-            </section>
-
-            <section class="curtain" data-section="scope">
-                <button class="curtain-trigger">PROJECT SCOPE</button>
-                <div class="curtain-content">
-                    <div class="scope-columns">
-                        <div class="scope-col" data-status="todo"><h4>Todo</h4><div class="items" id="scope-todo"></div></div>
-                        <div class="scope-col" data-status="doing"><h4>Doing</h4><div class="items" id="scope-doing"></div></div>
-                        <div class="scope-col" data-status="done"><h4>Done</h4><div class="items" id="scope-done"></div></div>
-                    </div>
-                    <div class="scope-input">
-                        <input type="text" id="scope-new-val" placeholder="New task...">
-                        <button id="btn-add-scope">ADD</button>
-                    </div>
-                </div>
-            </section>
-
-            <section class="curtain" data-section="notes">
-                <button class="curtain-trigger">NOTES / INTENT</button>
-                <div class="curtain-content">
-                    <label class="field-label">CHANGELOG / INTENT</label>
-                    <textarea id="note-intent" placeholder="Why are you making these changes?" class="note-area"></textarea>
-                    <label class="field-label">GENERAL SCRATCHPAD</label>
-                    <textarea id="note-free" placeholder="Draft ideas here..." class="note-area"></textarea>
-                </div>
-            </section>
-
             <section class="curtain" data-section="versions">
-                <button class="curtain-trigger">VERSIONS & RESTORE</button>
+                <button class="curtain-trigger">VERSION HISTORY</button>
                 <div class="curtain-content">
-                    <div class="version-controls">
-                        <button id="btn-restore-stable" class="btn-subtle" style="width: 100%; margin-bottom: 10px;">RESTORE STABLE VERSION</button>
-                    </div>
+                    <button id="btn-restore-stable" class="btn-subtle" style="width: 100%; margin-bottom: 15px;">RESTORE STABLE BASELINE</button>
                     <div id="snapshot-list" class="snapshot-history"></div>
                 </div>
             </section>
         </main>
 
         <div id="guide-toast" class="guide-toast hidden"></div>
-        <div class="history-log" id="action-history">
-            <div class="log-entry">Session initialized.</div>
-        </div>
+        <div class="history-log" id="action-history"></div>
     </div>
 
     <div id="experiment-site" class="preview-sheet collapsed">
@@ -135,8 +96,8 @@
             </div>
         </div>
         <div class="preview-toolbar">
-            <button id="btn-focus-mode" class="btn-subtle">FULL FOCUS</button>
-            <button id="btn-close-preview" class="btn-subtle">CLOSE</button>
+            <button id="btn-focus-mode" class="btn-subtle">FULLSCREEN</button>
+            <button id="btn-close-preview" class="btn-subtle">MINIMIZE</button>
         </div>
         <div class="preview-body">
             <iframe id="preview-iframe" sandbox="allow-scripts allow-forms allow-modals allow-same-origin"></iframe>
@@ -147,14 +108,15 @@
         <div class="menu-content">
             <h3>MASTER CONTROLS</h3>
             <div class="menu-grid">
-                <button id="m-copy-html">COPY HTML ONLY</button>
-                <button id="m-copy-css">COPY CSS ONLY</button>
-                <button id="m-copy-js">COPY JS ONLY</button>
+                <button id="m-copy-html">COPY HTML</button>
+                <button id="m-copy-css">COPY CSS</button>
+                <button id="m-copy-js">COPY JS</button>
+                <button id="m-export-single" style="color: var(--purple); border-color: var(--purple);">EXPORT SINGLE FILE (.html)</button>
                 <hr style="border: 0; border-top: 1px solid var(--border); width: 100%;">
                 <button id="m-repair-toggle">AUTO-REPAIR: OFF</button>
-                <button id="m-clear-data" style="color: var(--red);">CLEAR ALL LOCAL STORAGE</button>
+                <button id="m-clear-data" style="color: var(--red);">WIPE ALL LOCAL DATA</button>
             </div>
-            <button id="btn-menu-close" class="btn-primary" style="width: 100%;">BACK TO BUILDER</button>
+            <button id="btn-menu-close" class="btn-primary" style="width: 100%;">EXIT MENU</button>
         </div>
     </div>
 
