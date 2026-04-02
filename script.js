@@ -1,3 +1,11 @@
+/** * FIELDBUILDER - SURGICAL FIX PASS v1.2
+ * Focus: Error guarding, missing handlers, and functional completeness.
+ */
+
+window.onerror = function (msg, src, line) {
+    console.error('FieldBuilder error:', msg, 'at line:', line);
+};
+
 const UI = {
     editors: {
         html: document.getElementById('editor-html'),
@@ -24,8 +32,34 @@ let state = {
     lastUpdate: Date.now()
 };
 
-// 1. PREVIEW ENGINE
+// --- CORE UTILITIES ---
+function logEvent(msg) {
+    if (!UI.history) return;
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    UI.history.prepend(div);
+}
+
+function showGuide(msg) {
+    if (!UI.guide) return;
+    UI.guide.textContent = msg;
+    UI.guide.classList.remove('hidden');
+    setTimeout(() => UI.guide.classList.add('hidden'), 2500);
+}
+
+function updateLineNumbers(lang) {
+    if (!UI.editors[lang] || !UI.lines[lang]) return;
+    const lines = UI.editors[lang].value.split('\n').length;
+    let html = '';
+    for (let i = 1; i <= lines; i++) html += i + '<br>';
+    UI.lines[lang].innerHTML = html;
+}
+
+// --- PREVIEW ENGINE ---
 function updatePreview() {
+    if (!UI.preview) return;
+
     const html = UI.editors.html.value;
     const css = `<style>${UI.editors.css.value}</style>`;
     const js = `<script>
@@ -47,6 +81,7 @@ function updatePreview() {
 
 window.addEventListener('message', (e) => {
     const pill = document.getElementById('preview-status-pill');
+    if (!pill) return;
     if (e.data.status === 'OK') {
         pill.textContent = 'PREVIEW OK';
         pill.style.color = 'var(--cyan)';
@@ -56,18 +91,18 @@ window.addEventListener('message', (e) => {
     }
 });
 
-// 2. CORE SYSTEMS
+// --- DATA PERSISTENCE ---
 function saveDraft() {
     const prefix = state.sandbox ? 'fr_builder_sandbox_' : 'fr_builder_';
     localStorage.setItem(prefix + 'html', UI.editors.html.value);
     localStorage.setItem(prefix + 'css', UI.editors.css.value);
     localStorage.setItem(prefix + 'js', UI.editors.js.value);
-    UI.status.textContent = state.sandbox ? 'SANDBOX DIRTY' : 'DRAFT SAVED';
+    if (UI.status) UI.status.textContent = state.sandbox ? 'SANDBOX DIRTY' : 'DRAFT SAVED';
 }
 
 let saveTimer;
 function debounceUpdate() {
-    UI.status.textContent = 'WRITING...';
+    if (UI.status) UI.status.textContent = 'WRITING...';
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
         saveDraft();
@@ -76,6 +111,7 @@ function debounceUpdate() {
     }, 1000);
 }
 
+// --- FEATURE HANDLERS ---
 function runRepair(silent = false) {
     let code = UI.editors.html.value;
     const tags = ['div', 'span', 'p', 'section', 'header', 'footer', 'main'];
@@ -101,25 +137,46 @@ function runRepair(silent = false) {
     }
 }
 
-// 3. EXPORT & COPY
 async function copyProject(type = 'all') {
-    let content = '';
-    if (type === 'all') {
-        content = `<!DOCTYPE html><html><head><style>${UI.editors.css.value}</style></head><body>${UI.editors.html.value}<script>${UI.editors.js.value}<\/script></body></html>`;
-    } else {
-        content = UI.editors[type].value;
+    let content = (type === 'all') ? 
+        `<!DOCTYPE html><html><head><style>${UI.editors.css.value}</style></head><body>${UI.editors.html.value}<script>${UI.editors.js.value}<\/script></body></html>` : 
+        UI.editors[type].value;
+
+    try {
+        await navigator.clipboard.writeText(content);
+        showGuide(`${type.toUpperCase()} Copied`);
+    } catch (err) {
+        const textArea = document.createElement("textarea");
+        textArea.value = content;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showGuide(`${type.toUpperCase()} Copied`);
     }
-    await navigator.clipboard.writeText(content);
-    showGuide(`${type.toUpperCase()} Copied`);
     logEvent(`Action: Copied ${type}`);
 }
 
+function exportSingle() {
+    const content = `<!DOCTYPE html><html><head><style>${UI.editors.css.value}</style></head><body>${UI.editors.html.value}<script>${UI.editors.js.value}<\/script></body></html>`;
+    const blob = new Blob([content], { type: 'text/html' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = "fieldbuilder_single.html";
+    link.click();
+    logEvent("Action: Exported Single HTML");
+    showGuide("HTML Downloaded");
+}
+
 function exportZip() {
+    if (typeof JSZip === 'undefined') {
+        showGuide("Error: JSZip not loaded");
+        return;
+    }
     const zip = new JSZip();
     zip.file("index.html", `<!DOCTYPE html><html><head><link rel="stylesheet" href="style.css"></head><body>${UI.editors.html.value}<script src="script.js"><\/script></body></html>`);
     zip.file("style.css", UI.editors.css.value);
     zip.file("script.js", UI.editors.js.value);
-
     zip.generateAsync({type:"blob"}).then(content => {
         const link = document.createElement('a');
         link.href = URL.createObjectURL(content);
@@ -130,12 +187,28 @@ function exportZip() {
     });
 }
 
-// 4. VERSIONING
 function saveStable() {
     const data = { h: UI.editors.html.value, c: UI.editors.css.value, j: UI.editors.js.value, ts: Date.now() };
     localStorage.setItem('fr_builder_stable', JSON.stringify(data));
     logEvent("Checkpoint: Stable saved");
     showGuide("Stable baseline saved");
+}
+
+function restoreStable() {
+    const raw = localStorage.getItem('fr_builder_stable');
+    if (!raw) {
+        showGuide("No stable version found");
+        return;
+    }
+    if (!confirm("Restore stable version? Current changes will be lost.")) return;
+    const data = JSON.parse(raw);
+    UI.editors.html.value = data.h;
+    UI.editors.css.value = data.c;
+    UI.editors.js.value = data.j;
+    ['html', 'css', 'js'].forEach(updateLineNumbers);
+    updatePreview();
+    logEvent("Checkpoint: Restored Stable");
+    showGuide("Stable version restored");
 }
 
 function takeSnapshot() {
@@ -149,6 +222,7 @@ function takeSnapshot() {
 
 function renderSnapshots() {
     const container = document.getElementById('snapshot-list');
+    if (!container) return;
     const snaps = JSON.parse(localStorage.getItem('fr_builder_snapshots') || '[]');
     if (snaps.length === 0) {
         container.innerHTML = '<div class="empty-state">No snapshots yet</div>';
@@ -163,7 +237,7 @@ function renderSnapshots() {
 }
 
 window.restoreSnapshot = (id) => {
-    if (!confirm("Discard current changes?")) return;
+    if (!confirm("Restore this snapshot?")) return;
     const snaps = JSON.parse(localStorage.getItem('fr_builder_snapshots') || '[]');
     const snap = snaps.find(s => s.id === id);
     if (snap) {
@@ -172,151 +246,143 @@ window.restoreSnapshot = (id) => {
         UI.editors.js.value = snap.j;
         ['html', 'css', 'js'].forEach(updateLineNumbers);
         updatePreview();
+        logEvent(`Checkpoint: Restored Snapshot ${id}`);
         showGuide("Snapshot restored");
     }
 };
 
-// 5. NAVIGATION & SEARCH
-function runSearch(q) {
-    const results = document.getElementById('search-results');
-    results.innerHTML = '';
-    if (!q || q.length < 2) return;
-
-    ['html', 'css', 'js'].forEach(lang => {
-        const lines = UI.editors[lang].value.split('\n');
-        lines.forEach((line, i) => {
-            if (line.toLowerCase().includes(q.toLowerCase())) {
-                const item = document.createElement('div');
-                item.className = 'search-item';
-                const preview = line.trim().slice(0, 70).replace(new RegExp(q, 'gi'), m => `<mark>${m}</mark>`);
-                item.innerHTML = `<span class="line">${lang.toUpperCase()} L${i+1}</span> ${preview}`;
-                item.onclick = () => jumpToLine(lang, i);
-                results.appendChild(item);
-            }
-        });
-    });
-}
-
-function jumpToLine(lang, index) {
-    document.querySelectorAll('.curtain').forEach(c => c.classList.remove('active'));
-    const parent = document.querySelector(`[data-section="${lang}"]`);
-    parent.classList.add('active');
-    
-    UI.editors[lang].focus();
-    const lineHeight = 22.4; 
-    UI.editors[lang].scrollTop = index * lineHeight;
-    showGuide(`Jumped to L${index + 1}`);
-}
-
-// 6. INITIALIZATION & EVENTS
+// --- EVENT WIRING ---
 function setupEventListeners() {
-    // Top Bar
-    document.getElementById('btn-copy-all').onclick = () => copyProject('all');
-    document.getElementById('btn-menu').onclick = () => UI.menu.classList.remove('hidden');
-    document.getElementById('btn-menu-close').onclick = () => UI.menu.classList.add('hidden');
-    
+    const wire = (id, fn) => {
+        const el = document.getElementById(id);
+        if (el) el.onclick = fn;
+    };
+
+    // Header & Menu
+    wire('btn-copy-all', () => copyProject('all'));
+    wire('btn-menu', () => UI.menu && UI.menu.classList.remove('hidden'));
+    wire('btn-menu-close', () => UI.menu && UI.menu.classList.add('hidden'));
+
     // Quick Actions
-    document.getElementById('btn-save-stable-quick').onclick = saveStable;
-    document.getElementById('btn-snapshot-quick').onclick = takeSnapshot;
-    document.getElementById('btn-export-quick').onclick = exportZip;
-    document.getElementById('btn-repair-quick').onclick = () => runRepair();
-    document.getElementById('toggle-sandbox').onclick = () => {
+    wire('btn-save-stable-quick', saveStable);
+    wire('btn-snapshot-quick', takeSnapshot);
+    wire('btn-export-quick', exportZip);
+    wire('btn-repair-quick', () => runRepair());
+    
+    wire('toggle-sandbox', () => {
         state.sandbox = !state.sandbox;
-        document.getElementById('toggle-sandbox').classList.toggle('active', state.sandbox);
+        const btn = document.getElementById('toggle-sandbox');
+        if (btn) btn.classList.toggle('active', state.sandbox);
         const prefix = state.sandbox ? 'fr_builder_sandbox_' : 'fr_builder_';
         UI.editors.html.value = localStorage.getItem(prefix + 'html') || '';
         UI.editors.css.value = localStorage.getItem(prefix + 'css') || '';
         UI.editors.js.value = localStorage.getItem(prefix + 'js') || '';
         ['html', 'css', 'js'].forEach(updateLineNumbers);
         updatePreview();
-        showGuide(state.sandbox ? "Sandbox Mode Active" : "Switched to Main Draft");
-    };
+        showGuide(state.sandbox ? "Sandbox Mode Active" : "Main Draft Loaded");
+    });
+
+    // Preview
+    wire('preview-drag-handle', () => {
+        if (!UI.sheet) return;
+        UI.sheet.classList.toggle('collapsed');
+        const txt = document.querySelector('.pull-text');
+        if (txt) txt.textContent = UI.sheet.classList.contains('collapsed') ? 'PULL TO EXPAND' : 'PULL TO HIDE';
+    });
+    wire('btn-focus-mode', () => UI.sheet && UI.sheet.classList.add('full'));
+    wire('btn-close-preview', () => {
+        if (!UI.sheet) return;
+        UI.sheet.classList.add('collapsed');
+        UI.sheet.classList.remove('full');
+    });
+
+    // Menu Internals
+    wire('m-copy-html', () => copyProject('html'));
+    wire('m-copy-css', () => copyProject('css'));
+    wire('m-copy-js', () => copyProject('js'));
+    wire('m-export-single', exportSingle);
+    wire('m-repair-toggle', (e) => {
+        state.autoRepair = !state.autoRepair;
+        e.target.textContent = `AUTO-REPAIR: ${state.autoRepair ? 'ON' : 'OFF'}`;
+    });
+    wire('m-clear-data', () => {
+        if (confirm("ERASE ALL LOCAL STORAGE? This cannot be undone.")) {
+            localStorage.clear();
+            location.reload();
+        }
+    });
+
+    // Versions
+    wire('btn-restore-stable', restoreStable);
+
+    // Editors
+    ['html', 'css', 'js'].forEach(lang => {
+        if (UI.editors[lang]) {
+            UI.editors[lang].oninput = () => {
+                updateLineNumbers(lang);
+                debounceUpdate();
+            };
+            UI.editors[lang].onscroll = () => {
+                if (UI.lines[lang]) UI.lines[lang].scrollTop = UI.editors[lang].scrollTop;
+            };
+        }
+    });
 
     // Curtains
     document.querySelectorAll('.curtain-trigger').forEach(btn => {
         btn.onclick = () => {
             const cur = btn.parentElement;
             const wasActive = cur.classList.contains('active');
+            document.querySelectorAll('.curtain').forEach(c => c.classList.remove('active'));
             if (!wasActive) {
-                document.querySelectorAll('.curtain').forEach(c => c.classList.remove('active'));
                 cur.classList.add('active');
                 cur.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } else {
-                cur.classList.remove('active');
             }
         };
     });
 
-    // Editors
-    ['html', 'css', 'js'].forEach(lang => {
-        UI.editors[lang].oninput = () => {
-            updateLineNumbers(lang);
-            debounceUpdate();
-        };
-        UI.editors[lang].onscroll = () => {
-            UI.lines[lang].scrollTop = UI.editors[lang].scrollTop;
-        };
-    });
-
-    // Preview
-    document.getElementById('preview-drag-handle').onclick = () => {
-        UI.sheet.classList.toggle('collapsed');
-        const collapsed = UI.sheet.classList.contains('collapsed');
-        document.querySelector('.pull-text').textContent = collapsed ? 'PULL TO EXPAND' : 'PULL TO HIDE';
-    };
-    document.getElementById('btn-focus-mode').onclick = () => UI.sheet.classList.add('full');
-    document.getElementById('btn-close-preview').onclick = () => {
-        UI.sheet.classList.add('collapsed');
-        UI.sheet.classList.remove('full');
-    };
-
-    // Menu Sub-actions
-    document.getElementById('m-copy-html').onclick = () => copyProject('html');
-    document.getElementById('m-copy-css').onclick = () => copyProject('css');
-    document.getElementById('m-copy-js').onclick = () => copyProject('js');
-    document.getElementById('m-repair-toggle').onclick = () => {
-        state.autoRepair = !state.autoRepair;
-        document.getElementById('m-repair-toggle').textContent = `AUTO-REPAIR: ${state.autoRepair ? 'ON' : 'OFF'}`;
-    };
-    document.getElementById('m-clear-data').onclick = () => {
-        if (confirm("Erase all progress?")) {
-            localStorage.clear();
-            location.reload();
-        }
-    };
-
     // Search
-    document.getElementById('global-search').oninput = (e) => runSearch(e.target.value);
+    const searchInp = document.getElementById('global-search');
+    if (searchInp) {
+        searchInp.oninput = (e) => {
+            const results = document.getElementById('search-results');
+            if (!results) return;
+            const q = e.target.value.toLowerCase();
+            results.innerHTML = '';
+            if (q.length < 2) return;
+            ['html', 'css', 'js'].forEach(lang => {
+                UI.editors[lang].value.split('\n').forEach((line, i) => {
+                    if (line.toLowerCase().includes(q)) {
+                        const div = document.createElement('div');
+                        div.className = 'search-item';
+                        div.innerHTML = `<span class="line">${lang.toUpperCase()} L${i+1}</span> ${line.trim().slice(0,60).replace(new RegExp(q,'gi'), m=>`<mark>${m}</mark> `)}`;
+                        div.onclick = () => {
+                            document.querySelectorAll('.curtain').forEach(c => c.classList.remove('active'));
+                            const p = document.querySelector(`[data-section="${lang}"]`);
+                            if (p) p.classList.add('active');
+                            UI.editors[lang].focus();
+                            UI.editors[lang].scrollTop = i * 22;
+                        };
+                        results.appendChild(div);
+                    }
+                });
+            });
+        };
+    }
 }
 
-function updateLineNumbers(lang) {
-    const lines = UI.editors[lang].value.split('\n').length;
-    let html = '';
-    for (let i = 1; i <= lines; i++) html += i + '<br>';
-    UI.lines[lang].innerHTML = html;
-}
-
-function logEvent(msg) {
-    const div = document.createElement('div');
-    div.className = 'log-entry';
-    div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    UI.history.prepend(div);
-}
-
-function showGuide(msg) {
-    UI.guide.textContent = msg;
-    UI.guide.classList.remove('hidden');
-    setTimeout(() => UI.guide.classList.add('hidden'), 2500);
-}
-
-// Start
+// --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
-    UI.editors.html.value = localStorage.getItem('fr_builder_html') || '<h1>FieldBuilder</h1>\n<p>Start creating.</p>';
-    UI.editors.css.value = localStorage.getItem('fr_builder_css') || 'body { background: #fff; padding: 40px; font-family: system-ui; color: #111; }';
-    UI.editors.js.value = localStorage.getItem('fr_builder_js') || 'console.log("Ready.");';
-    
-    ['html', 'css', 'js'].forEach(updateLineNumbers);
-    setupEventListeners();
-    updatePreview();
-    renderSnapshots();
+    try {
+        UI.editors.html.value = localStorage.getItem('fr_builder_html') || '<h1>FieldBuilder</h1>';
+        UI.editors.css.value = localStorage.getItem('fr_builder_css') || 'body { background: #fff; padding: 20px; font-family: sans-serif; }';
+        UI.editors.js.value = localStorage.getItem('fr_builder_js') || 'console.log("Ready.");';
+        ['html', 'css', 'js'].forEach(updateLineNumbers);
+        setupEventListeners();
+        updatePreview();
+        renderSnapshots();
+        console.log("FieldBuilder v1.2 Online");
+    } catch (e) {
+        console.error("Critical Init Error:", e);
+    }
 });
