@@ -1,388 +1,125 @@
-/** * FIELDBUILDER - SURGICAL FIX PASS v1.2
- * Focus: Error guarding, missing handlers, and functional completeness.
- */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FIELDBUILDER // CORE</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
 
-window.onerror = function (msg, src, line) {
-    console.error('FieldBuilder error:', msg, 'at line:', line);
-};
+    <div id="master-site" class="master-container">
+        <header class="toolbar">
+            <div class="toolbar-top">
+                <div class="brand">
+                    <span class="brand-name">FIELDBUILDER</span>
+                    <div id="status-indicator" class="status-pill">SYSTEM READY</div>
+                </div>
+                <div class="toolbar-actions">
+                    <button id="btn-copy-all" class="btn-subtle">COPY ALL</button>
+                    <button id="btn-menu" class="btn-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="quick-action-bar">
+                <button id="btn-save-stable-quick" class="qa-btn">SAVE STABLE</button>
+                <button id="btn-snapshot-quick" class="qa-btn">SNAPSHOT</button>
+                <button id="toggle-sandbox" class="qa-btn">SANDBOX MODE</button>
+                <button id="btn-export-quick" class="qa-btn">EXPORT ZIP</button>
+                <button id="btn-repair-quick" class="qa-btn">AUTO-REPAIR</button>
+            </div>
+        </header>
 
-const UI = {
-    editors: {
-        html: document.getElementById('editor-html'),
-        css: document.getElementById('editor-css'),
-        js: document.getElementById('editor-js')
-    },
-    lines: {
-        html: document.getElementById('ln-html'),
-        css: document.getElementById('ln-css'),
-        js: document.getElementById('ln-js')
-    },
-    preview: document.getElementById('preview-iframe'),
-    status: document.getElementById('status-indicator'),
-    sheet: document.getElementById('experiment-site'),
-    history: document.getElementById('action-history'),
-    guide: document.getElementById('guide-toast'),
-    menu: document.getElementById('global-menu')
-};
+        <main class="build-area">
+            <section class="curtain" data-section="search">
+                <button class="curtain-trigger">GLOBAL SEARCH</button>
+                <div class="curtain-content">
+                    <div class="search-container">
+                        <input type="text" id="global-search" placeholder="Find code across all layers...">
+                        <div id="search-results" class="search-results-panel"></div>
+                    </div>
+                </div>
+            </section>
 
-let state = {
-    sandbox: false,
-    autoRepair: false,
-    currentBlobUrl: null,
-    lastUpdate: Date.now()
-};
+            <section class="curtain active" data-section="html">
+                <button class="curtain-trigger">HTML STRUCTURE</button>
+                <div class="curtain-content">
+                    <div class="editor-wrapper">
+                        <div class="line-numbers" id="ln-html"></div>
+                        <textarea id="editor-html" spellcheck="false" class="code-editor"></textarea>
+                    </div>
+                </div>
+            </section>
 
-// --- CORE UTILITIES ---
-function logEvent(msg) {
-    if (!UI.history) return;
-    const div = document.createElement('div');
-    div.className = 'log-entry';
-    div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    UI.history.prepend(div);
-}
+            <section class="curtain" data-section="css">
+                <button class="curtain-trigger">CSS STYLING</button>
+                <div class="curtain-content">
+                    <div class="editor-wrapper">
+                        <div class="line-numbers" id="ln-css"></div>
+                        <textarea id="editor-css" spellcheck="false" class="code-editor"></textarea>
+                    </div>
+                </div>
+            </section>
 
-function showGuide(msg) {
-    if (!UI.guide) return;
-    UI.guide.textContent = msg;
-    UI.guide.classList.remove('hidden');
-    setTimeout(() => UI.guide.classList.add('hidden'), 2500);
-}
+            <section class="curtain" data-section="js">
+                <button class="curtain-trigger">JS LOGIC</button>
+                <div class="curtain-content">
+                    <div class="editor-wrapper">
+                        <div class="line-numbers" id="ln-js"></div>
+                        <textarea id="editor-js" spellcheck="false" class="code-editor"></textarea>
+                    </div>
+                </div>
+            </section>
 
-function updateLineNumbers(lang) {
-    if (!UI.editors[lang] || !UI.lines[lang]) return;
-    const lines = UI.editors[lang].value.split('\n').length;
-    let html = '';
-    for (let i = 1; i <= lines; i++) html += i + '<br>';
-    UI.lines[lang].innerHTML = html;
-}
+            <section class="curtain" data-section="versions">
+                <button class="curtain-trigger">VERSION HISTORY</button>
+                <div class="curtain-content">
+                    <button id="btn-restore-stable" class="btn-subtle" style="width: 100%; margin-bottom: 15px;">RESTORE STABLE BASELINE</button>
+                    <div id="snapshot-list" class="snapshot-history"></div>
+                </div>
+            </section>
+        </main>
 
-// --- PREVIEW ENGINE ---
-function updatePreview() {
-    if (!UI.preview) return;
+        <div id="guide-toast" class="guide-toast hidden"></div>
+        <div class="history-log" id="action-history"></div>
+    </div>
 
-    const html = UI.editors.html.value;
-    const css = `<style>${UI.editors.css.value}</style>`;
-    const js = `<script>
-        try {
-            ${UI.editors.js.value}
-            window.parent.postMessage({status: 'OK'}, '*');
-        } catch(e) {
-            window.parent.postMessage({status: 'ERROR', msg: e.message}, '*');
-        }
-    <\/script>`;
-
-    const doc = `<!DOCTYPE html><html><head>${css}</head><body>${html}${js}</body></html>`;
-    const blob = new Blob([doc], { type: 'text/html' });
-
-    if (state.currentBlobUrl) URL.revokeObjectURL(state.currentBlobUrl);
-    state.currentBlobUrl = URL.createObjectURL(blob);
-    UI.preview.src = state.currentBlobUrl;
-}
-
-window.addEventListener('message', (e) => {
-    const pill = document.getElementById('preview-status-pill');
-    if (!pill) return;
-    if (e.data.status === 'OK') {
-        pill.textContent = 'PREVIEW OK';
-        pill.style.color = 'var(--cyan)';
-    } else if (e.data.status === 'ERROR') {
-        pill.textContent = 'PREVIEW BROKEN';
-        pill.style.color = 'var(--red)';
-    }
-});
-
-// --- DATA PERSISTENCE ---
-function saveDraft() {
-    const prefix = state.sandbox ? 'fr_builder_sandbox_' : 'fr_builder_';
-    localStorage.setItem(prefix + 'html', UI.editors.html.value);
-    localStorage.setItem(prefix + 'css', UI.editors.css.value);
-    localStorage.setItem(prefix + 'js', UI.editors.js.value);
-    if (UI.status) UI.status.textContent = state.sandbox ? 'SANDBOX DIRTY' : 'DRAFT SAVED';
-}
-
-let saveTimer;
-function debounceUpdate() {
-    if (UI.status) UI.status.textContent = 'WRITING...';
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-        saveDraft();
-        updatePreview();
-        if (state.autoRepair) runRepair(true);
-    }, 1000);
-}
-
-// --- FEATURE HANDLERS ---
-function runRepair(silent = false) {
-    let code = UI.editors.html.value;
-    const tags = ['div', 'span', 'p', 'section', 'header', 'footer', 'main'];
-    let fixedCount = 0;
-
-    tags.forEach(tag => {
-        const opened = (code.match(new RegExp('<' + tag, 'g')) || []).length;
-        const closed = (code.match(new RegExp('</' + tag + '>', 'g')) || []).length;
-        if (opened > closed) {
-            code += `\n</${tag}>`.repeat(opened - closed);
-            fixedCount += (opened - closed);
-        }
-    });
-
-    if (fixedCount > 0) {
-        UI.editors.html.value = code;
-        updateLineNumbers('html');
-        updatePreview();
-        logEvent(`Repair: Fixed ${fixedCount} unclosed tags.`);
-        if (!silent) showGuide(`Repaired ${fixedCount} tags`);
-    } else if (!silent) {
-        showGuide("No issues found");
-    }
-}
-
-async function copyProject(type = 'all') {
-    let content = (type === 'all') ? 
-        `<!DOCTYPE html><html><head><style>${UI.editors.css.value}</style></head><body>${UI.editors.html.value}<script>${UI.editors.js.value}<\/script></body></html>` : 
-        UI.editors[type].value;
-
-    try {
-        await navigator.clipboard.writeText(content);
-        showGuide(`${type.toUpperCase()} Copied`);
-    } catch (err) {
-        const textArea = document.createElement("textarea");
-        textArea.value = content;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        showGuide(`${type.toUpperCase()} Copied`);
-    }
-    logEvent(`Action: Copied ${type}`);
-}
-
-function exportSingle() {
-    const content = `<!DOCTYPE html><html><head><style>${UI.editors.css.value}</style></head><body>${UI.editors.html.value}<script>${UI.editors.js.value}<\/script></body></html>`;
-    const blob = new Blob([content], { type: 'text/html' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = "fieldbuilder_single.html";
-    link.click();
-    logEvent("Action: Exported Single HTML");
-    showGuide("HTML Downloaded");
-}
-
-function exportZip() {
-    if (typeof JSZip === 'undefined') {
-        showGuide("Error: JSZip not loaded");
-        return;
-    }
-    const zip = new JSZip();
-    zip.file("index.html", `<!DOCTYPE html><html><head><link rel="stylesheet" href="style.css"></head><body>${UI.editors.html.value}<script src="script.js"><\/script></body></html>`);
-    zip.file("style.css", UI.editors.css.value);
-    zip.file("script.js", UI.editors.js.value);
-    zip.generateAsync({type:"blob"}).then(content => {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(content);
-        link.download = "fieldbuilder_project.zip";
-        link.click();
-        logEvent("Action: ZIP Exported");
-        showGuide("ZIP Downloaded");
-    });
-}
-
-function saveStable() {
-    const data = { h: UI.editors.html.value, c: UI.editors.css.value, j: UI.editors.js.value, ts: Date.now() };
-    localStorage.setItem('fr_builder_stable', JSON.stringify(data));
-    logEvent("Checkpoint: Stable saved");
-    showGuide("Stable baseline saved");
-}
-
-function restoreStable() {
-    const raw = localStorage.getItem('fr_builder_stable');
-    if (!raw) {
-        showGuide("No stable version found");
-        return;
-    }
-    if (!confirm("Restore stable version? Current changes will be lost.")) return;
-    const data = JSON.parse(raw);
-    UI.editors.html.value = data.h;
-    UI.editors.css.value = data.c;
-    UI.editors.js.value = data.j;
-    ['html', 'css', 'js'].forEach(updateLineNumbers);
-    updatePreview();
-    logEvent("Checkpoint: Restored Stable");
-    showGuide("Stable version restored");
-}
-
-function takeSnapshot() {
-    const snaps = JSON.parse(localStorage.getItem('fr_builder_snapshots') || '[]');
-    snaps.push({ id: Date.now(), h: UI.editors.html.value, c: UI.editors.css.value, j: UI.editors.js.value });
-    localStorage.setItem('fr_builder_snapshots', JSON.stringify(snaps));
-    renderSnapshots();
-    logEvent("Checkpoint: Snapshot created");
-    showGuide("Snapshot created");
-}
-
-function renderSnapshots() {
-    const container = document.getElementById('snapshot-list');
-    if (!container) return;
-    const snaps = JSON.parse(localStorage.getItem('fr_builder_snapshots') || '[]');
-    if (snaps.length === 0) {
-        container.innerHTML = '<div class="empty-state">No snapshots yet</div>';
-        return;
-    }
-    container.innerHTML = snaps.map(s => `
-        <div class="snapshot-item">
-            <span>${new Date(s.id).toLocaleTimeString()}</span>
-            <button class="btn-subtle" onclick="restoreSnapshot(${s.id})">RESTORE</button>
+    <div id="experiment-site" class="preview-sheet collapsed">
+        <div class="preview-handle" id="preview-drag-handle">
+            <div class="handle-bar"></div>
+            <div class="handle-labels">
+                <span id="preview-status-pill" class="p-status">PREVIEW OK</span>
+                <span class="pull-text">PULL TO EXPAND</span>
+            </div>
         </div>
-    `).reverse().join('');
-}
+        <div class="preview-toolbar">
+            <button id="btn-focus-mode" class="btn-subtle">FULLSCREEN</button>
+            <button id="btn-close-preview" class="btn-subtle">MINIMIZE</button>
+        </div>
+        <div class="preview-body">
+            <iframe id="preview-iframe" sandbox="allow-scripts allow-forms allow-modals allow-same-origin"></iframe>
+        </div>
+    </div>
 
-window.restoreSnapshot = (id) => {
-    if (!confirm("Restore this snapshot?")) return;
-    const snaps = JSON.parse(localStorage.getItem('fr_builder_snapshots') || '[]');
-    const snap = snaps.find(s => s.id === id);
-    if (snap) {
-        UI.editors.html.value = snap.h;
-        UI.editors.css.value = snap.c;
-        UI.editors.js.value = snap.j;
-        ['html', 'css', 'js'].forEach(updateLineNumbers);
-        updatePreview();
-        logEvent(`Checkpoint: Restored Snapshot ${id}`);
-        showGuide("Snapshot restored");
-    }
-};
+    <div id="global-menu" class="menu-overlay hidden">
+        <div class="menu-content">
+            <h3>MASTER CONTROLS</h3>
+            <div class="menu-grid">
+                <button id="m-copy-html">COPY HTML</button>
+                <button id="m-copy-css">COPY CSS</button>
+                <button id="m-copy-js">COPY JS</button>
+                <button id="m-export-single" style="color: var(--purple); border-color: var(--purple);">EXPORT SINGLE FILE (.html)</button>
+                <hr style="border: 0; border-top: 1px solid var(--border); width: 100%;">
+                <button id="m-repair-toggle">AUTO-REPAIR: OFF</button>
+                <button id="m-clear-data" style="color: var(--red);">WIPE ALL LOCAL DATA</button>
+            </div>
+            <button id="btn-menu-close" class="btn-primary" style="width: 100%;">EXIT MENU</button>
+        </div>
+    </div>
 
-// --- EVENT WIRING ---
-function setupEventListeners() {
-    const wire = (id, fn) => {
-        const el = document.getElementById(id);
-        if (el) el.onclick = fn;
-    };
-
-    // Header & Menu
-    wire('btn-copy-all', () => copyProject('all'));
-    wire('btn-menu', () => UI.menu && UI.menu.classList.remove('hidden'));
-    wire('btn-menu-close', () => UI.menu && UI.menu.classList.add('hidden'));
-
-    // Quick Actions
-    wire('btn-save-stable-quick', saveStable);
-    wire('btn-snapshot-quick', takeSnapshot);
-    wire('btn-export-quick', exportZip);
-    wire('btn-repair-quick', () => runRepair());
-    
-    wire('toggle-sandbox', () => {
-        state.sandbox = !state.sandbox;
-        const btn = document.getElementById('toggle-sandbox');
-        if (btn) btn.classList.toggle('active', state.sandbox);
-        const prefix = state.sandbox ? 'fr_builder_sandbox_' : 'fr_builder_';
-        UI.editors.html.value = localStorage.getItem(prefix + 'html') || '';
-        UI.editors.css.value = localStorage.getItem(prefix + 'css') || '';
-        UI.editors.js.value = localStorage.getItem(prefix + 'js') || '';
-        ['html', 'css', 'js'].forEach(updateLineNumbers);
-        updatePreview();
-        showGuide(state.sandbox ? "Sandbox Mode Active" : "Main Draft Loaded");
-    });
-
-    // Preview
-    wire('preview-drag-handle', () => {
-        if (!UI.sheet) return;
-        UI.sheet.classList.toggle('collapsed');
-        const txt = document.querySelector('.pull-text');
-        if (txt) txt.textContent = UI.sheet.classList.contains('collapsed') ? 'PULL TO EXPAND' : 'PULL TO HIDE';
-    });
-    wire('btn-focus-mode', () => UI.sheet && UI.sheet.classList.add('full'));
-    wire('btn-close-preview', () => {
-        if (!UI.sheet) return;
-        UI.sheet.classList.add('collapsed');
-        UI.sheet.classList.remove('full');
-    });
-
-    // Menu Internals
-    wire('m-copy-html', () => copyProject('html'));
-    wire('m-copy-css', () => copyProject('css'));
-    wire('m-copy-js', () => copyProject('js'));
-    wire('m-export-single', exportSingle);
-    wire('m-repair-toggle', (e) => {
-        state.autoRepair = !state.autoRepair;
-        e.target.textContent = `AUTO-REPAIR: ${state.autoRepair ? 'ON' : 'OFF'}`;
-    });
-    wire('m-clear-data', () => {
-        if (confirm("ERASE ALL LOCAL STORAGE? This cannot be undone.")) {
-            localStorage.clear();
-            location.reload();
-        }
-    });
-
-    // Versions
-    wire('btn-restore-stable', restoreStable);
-
-    // Editors
-    ['html', 'css', 'js'].forEach(lang => {
-        if (UI.editors[lang]) {
-            UI.editors[lang].oninput = () => {
-                updateLineNumbers(lang);
-                debounceUpdate();
-            };
-            UI.editors[lang].onscroll = () => {
-                if (UI.lines[lang]) UI.lines[lang].scrollTop = UI.editors[lang].scrollTop;
-            };
-        }
-    });
-
-    // Curtains
-    document.querySelectorAll('.curtain-trigger').forEach(btn => {
-        btn.onclick = () => {
-            const cur = btn.parentElement;
-            const wasActive = cur.classList.contains('active');
-            document.querySelectorAll('.curtain').forEach(c => c.classList.remove('active'));
-            if (!wasActive) {
-                cur.classList.add('active');
-                cur.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        };
-    });
-
-    // Search
-    const searchInp = document.getElementById('global-search');
-    if (searchInp) {
-        searchInp.oninput = (e) => {
-            const results = document.getElementById('search-results');
-            if (!results) return;
-            const q = e.target.value.toLowerCase();
-            results.innerHTML = '';
-            if (q.length < 2) return;
-            ['html', 'css', 'js'].forEach(lang => {
-                UI.editors[lang].value.split('\n').forEach((line, i) => {
-                    if (line.toLowerCase().includes(q)) {
-                        const div = document.createElement('div');
-                        div.className = 'search-item';
-                        div.innerHTML = `<span class="line">${lang.toUpperCase()} L${i+1}</span> ${line.trim().slice(0,60).replace(new RegExp(q,'gi'), m=>`<mark>${m}</mark> `)}`;
-                        div.onclick = () => {
-                            document.querySelectorAll('.curtain').forEach(c => c.classList.remove('active'));
-                            const p = document.querySelector(`[data-section="${lang}"]`);
-                            if (p) p.classList.add('active');
-                            UI.editors[lang].focus();
-                            UI.editors[lang].scrollTop = i * 22;
-                        };
-                        results.appendChild(div);
-                    }
-                });
-            });
-        };
-    }
-}
-
-// --- INITIALIZATION ---
-document.addEventListener('DOMContentLoaded', () => {
-    try {
-        UI.editors.html.value = localStorage.getItem('fr_builder_html') || '<h1>FieldBuilder</h1>';
-        UI.editors.css.value = localStorage.getItem('fr_builder_css') || 'body { background: #fff; padding: 20px; font-family: sans-serif; }';
-        UI.editors.js.value = localStorage.getItem('fr_builder_js') || 'console.log("Ready.");';
-        ['html', 'css', 'js'].forEach(updateLineNumbers);
-        setupEventListeners();
-        updatePreview();
-        renderSnapshots();
-        console.log("FieldBuilder v1.2 Online");
-    } catch (e) {
-        console.error("Critical Init Error:", e);
-    }
-});
+    <script src="script.js"></script>
+</body>
+</html>
