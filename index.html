@@ -18,7 +18,9 @@
                 </div>
                 <div class="toolbar-actions">
                     <button id="btn-copy-all" class="btn-subtle">COPY ALL</button>
-                    <button id="btn-menu" class="btn-icon">MENU</button>
+                    <button id="btn-menu" class="btn-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
                 </div>
             </div>
             
@@ -36,7 +38,7 @@
                 <button class="curtain-trigger">SEARCH & NAVIGATION</button>
                 <div class="curtain-content">
                     <div class="search-container">
-                        <input type="text" id="global-search" placeholder="Search code or snippets...">
+                        <input type="text" id="global-search" placeholder="Search code (e.g. 'class', 'function')...">
                         <div id="search-results" class="search-results-panel"></div>
                     </div>
                 </div>
@@ -75,8 +77,10 @@
             <section class="curtain" data-section="snippets">
                 <button class="curtain-trigger">COMPONENTS / SNIPPETS</button>
                 <div class="curtain-content">
-                    <button id="btn-save-snippet" class="btn-primary">SAVE CURRENT AS SNIPPET</button>
-                    <div id="snippet-library" class="snippet-grid"></div>
+                    <button id="btn-save-snippet" class="btn-primary" style="width: 100%; margin-bottom: 15px;">SAVE CURRENT AS SNIPPET</button>
+                    <div id="snippet-library" class="snippet-grid">
+                        <div class="empty-state">No snippets saved yet.</div>
+                    </div>
                 </div>
             </section>
 
@@ -84,13 +88,13 @@
                 <button class="curtain-trigger">PROJECT SCOPE</button>
                 <div class="curtain-content">
                     <div class="scope-columns">
-                        <div class="scope-col" data-status="todo"><h4>Todo</h4><div class="items"></div></div>
-                        <div class="scope-col" data-status="doing"><h4>In Progress</h4><div class="items"></div></div>
-                        <div class="scope-col" data-status="done"><h4>Done</h4><div class="items"></div></div>
+                        <div class="scope-col" data-status="todo"><h4>Todo</h4><div class="items" id="scope-todo"></div></div>
+                        <div class="scope-col" data-status="doing"><h4>Doing</h4><div class="items" id="scope-doing"></div></div>
+                        <div class="scope-col" data-status="done"><h4>Done</h4><div class="items" id="scope-done"></div></div>
                     </div>
                     <div class="scope-input">
-                        <input type="text" id="scope-new-val" placeholder="New objective...">
-                        <button id="btn-add-scope">+</button>
+                        <input type="text" id="scope-new-val" placeholder="New task...">
+                        <button id="btn-add-scope">ADD</button>
                     </div>
                 </div>
             </section>
@@ -98,16 +102,18 @@
             <section class="curtain" data-section="notes">
                 <button class="curtain-trigger">NOTES / INTENT</button>
                 <div class="curtain-content">
-                    <textarea id="note-intent" placeholder="Why are you making these changes?"></textarea>
-                    <textarea id="note-free" placeholder="General scratchpad..."></textarea>
+                    <label class="field-label">CHANGELOG / INTENT</label>
+                    <textarea id="note-intent" placeholder="Why are you making these changes?" class="note-area"></textarea>
+                    <label class="field-label">GENERAL SCRATCHPAD</label>
+                    <textarea id="note-free" placeholder="Draft ideas here..." class="note-area"></textarea>
                 </div>
             </section>
 
             <section class="curtain" data-section="versions">
-                <button class="curtain-trigger">VERSIONS & COMPARE</button>
+                <button class="curtain-trigger">VERSIONS & RESTORE</button>
                 <div class="curtain-content">
                     <div class="version-controls">
-                        <button id="btn-view-changes" class="btn-subtle">VIEW CHANGES</button>
+                        <button id="btn-restore-stable" class="btn-subtle" style="width: 100%; margin-bottom: 10px;">RESTORE STABLE VERSION</button>
                     </div>
                     <div id="snapshot-list" class="snapshot-history"></div>
                 </div>
@@ -115,7 +121,9 @@
         </main>
 
         <div id="guide-toast" class="guide-toast hidden"></div>
-        <div class="history-log" id="action-history"></div>
+        <div class="history-log" id="action-history">
+            <div class="log-entry">Session initialized.</div>
+        </div>
     </div>
 
     <div id="experiment-site" class="preview-sheet collapsed">
@@ -137,16 +145,16 @@
 
     <div id="global-menu" class="menu-overlay hidden">
         <div class="menu-content">
-            <h3>MASTER ACTIONS</h3>
+            <h3>MASTER CONTROLS</h3>
             <div class="menu-grid">
-                <button id="m-copy-html">Copy HTML</button>
-                <button id="m-copy-css">Copy CSS</button>
-                <button id="m-copy-js">Copy JS</button>
-                <hr>
-                <button id="m-repair-toggle">Auto-Repair: OFF</button>
-                <button id="m-export-single">Export Single HTML</button>
+                <button id="m-copy-html">COPY HTML ONLY</button>
+                <button id="m-copy-css">COPY CSS ONLY</button>
+                <button id="m-copy-js">COPY JS ONLY</button>
+                <hr style="border: 0; border-top: 1px solid var(--border); width: 100%;">
+                <button id="m-repair-toggle">AUTO-REPAIR: OFF</button>
+                <button id="m-clear-data" style="color: var(--red);">CLEAR ALL LOCAL STORAGE</button>
             </div>
-            <button id="btn-menu-close" class="btn-primary">BACK</button>
+            <button id="btn-menu-close" class="btn-primary" style="width: 100%;">BACK TO BUILDER</button>
         </div>
     </div>
 
