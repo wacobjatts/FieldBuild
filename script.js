@@ -4,268 +4,227 @@ const UI = {
         css: document.getElementById('editor-css'),
         js: document.getElementById('editor-js')
     },
-    status: document.getElementById('status-indicator'),
+    lines: {
+        html: document.getElementById('ln-html'),
+        css: document.getElementById('ln-css'),
+        js: document.getElementById('ln-js')
+    },
     preview: document.getElementById('preview-iframe'),
-    previewSheet: document.getElementById('experiment-site'),
-    master: document.getElementById('master-site'),
-    history: document.getElementById('action-history')
+    status: document.getElementById('status-indicator'),
+    sheet: document.getElementById('experiment-site'),
+    history: document.getElementById('action-history'),
+    guide: document.getElementById('guide-toast')
 };
 
 let state = {
-    isSandbox: false,
-    isLocked: false,
+    sandbox: false,
     autoRepair: false,
-    currentPreviewState: 'collapsed',
-    lastSaved: null
+    lastUpdate: Date.now(),
+    history: []
 };
 
-// INITIALIZATION
-document.addEventListener('DOMContentLoaded', () => {
-    loadData();
-    setupEventListeners();
-    updatePreview();
-});
-
-function setupEventListeners() {
-    // Curtains
-    document.querySelectorAll('.curtain-trigger').forEach(trigger => {
-        trigger.addEventListener('click', () => {
-            const parent = trigger.parentElement;
-            const wasActive = parent.classList.contains('active');
-            document.querySelectorAll('.curtain').forEach(c => c.classList.remove('active'));
-            if (!wasActive) parent.classList.add('active');
-        });
-    });
-
-    // Preview Toggles
-    document.getElementById('preview-drag-handle').addEventListener('click', () => {
-        if (state.currentPreviewState === 'collapsed') {
-            expandPreview();
-        } else {
-            collapsePreview();
-        }
-    });
-
-    document.getElementById('btn-focus-mode').addEventListener('click', toggleFocusMode);
-    document.getElementById('btn-close-preview').addEventListener('click', collapsePreview);
-
-    // Sandbox & Lock
-    document.getElementById('toggle-sandbox').addEventListener('click', toggleSandbox);
-    document.getElementById('toggle-lock').addEventListener('click', toggleLock);
-
-    // Editors
-    Object.values(UI.editors).forEach(el => {
-        el.addEventListener('input', () => {
-            debouncedSave();
-            updatePreview();
-            setStatus('UNSAVED CHANGES');
-        });
-    });
-
-    // Actions
-    document.getElementById('btn-save-stable').addEventListener('click', saveStable);
-    document.getElementById('btn-export').addEventListener('click', exportZip);
-    document.getElementById('btn-snapshot').addEventListener('click', takeSnapshot);
-    document.getElementById('btn-generate').addEventListener('click', simulateAI);
-    
-    // Menu
-    document.getElementById('btn-menu').addEventListener('click', () => document.getElementById('global-menu').classList.remove('hidden'));
-    document.getElementById('btn-menu-close').addEventListener('click', () => document.getElementById('global-menu').classList.add('hidden'));
-}
-
-// PREVIEW ENGINE
+// 1. PREVIEW ENGINE (HIGH INTERACTION)
 function updatePreview() {
     const html = UI.editors.html.value;
     const css = `<style>${UI.editors.css.value}</style>`;
-    const js = `<script>${UI.editors.js.value}<\/script>`;
+    const js = `<script>
+        try {
+            ${UI.editors.js.value}
+            window.parent.postMessage({status: 'OK'}, '*');
+        } catch(e) {
+            window.parent.postMessage({status: 'ERROR', msg: e.message}, '*');
+        }
+    <\/script>`;
     
-    const content = `
-        <!DOCTYPE html>
-        <html>
-            <head>${css}</head>
-            <body>
-                ${html}
-                ${js}
-            </body>
-        </html>
-    `;
-
-    const blob = new Blob([content], { type: 'text/html' });
+    const doc = `<!DOCTYPE html><html><head>${css}</head><body>${html}${js}</body></html>`;
+    const blob = new Blob([doc], { type: 'text/html' });
     UI.preview.src = URL.createObjectURL(blob);
-    document.getElementById('preview-status').textContent = 'PREVIEW OK';
-    document.getElementById('preview-status').style.color = 'var(--cyan)';
 }
 
-// STORAGE SYSTEM
+window.addEventListener('message', (e) => {
+    const pill = document.getElementById('preview-status-pill');
+    if(e.data.status === 'OK') {
+        pill.textContent = 'PREVIEW OK';
+        pill.style.color = 'var(--cyan)';
+    } else if(e.data.status === 'ERROR') {
+        pill.textContent = 'PREVIEW BROKEN';
+        pill.style.color = 'var(--red)';
+        showGuide("Preview broken — open repair?");
+    }
+});
+
+// 2. STORAGE & AUTO-SAVE
 function saveDraft() {
-    const prefix = state.isSandbox ? 'fr_builder_sandbox_' : 'fr_builder_';
+    const prefix = state.sandbox ? 'fr_builder_sandbox_' : 'fr_builder_';
     localStorage.setItem(prefix + 'html', UI.editors.html.value);
     localStorage.setItem(prefix + 'css', UI.editors.css.value);
     localStorage.setItem(prefix + 'js', UI.editors.js.value);
-    setStatus('DRAFT SAVED');
-    logAction(state.isSandbox ? 'Sandbox draft updated' : 'Draft autosaved');
+    UI.status.textContent = 'DRAFT SAVED';
 }
 
-let saveTimeout;
-function debouncedSave() {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(saveDraft, 1000);
+let saveTimer;
+function debounceSave() {
+    UI.status.textContent = 'WRITING...';
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+        saveDraft();
+        if(state.autoRepair) runRepair(true);
+    }, 1000);
 }
 
-function saveStable() {
-    const data = {
-        html: UI.editors.html.value,
-        css: UI.editors.css.value,
-        js: UI.editors.js.value,
-        timestamp: Date.now()
-    };
-    localStorage.setItem('fr_builder_stable', JSON.stringify(data));
-    setStatus('STABLE SAVED');
-    logAction('Stable baseline saved');
-}
-
-function takeSnapshot() {
-    const name = prompt("Name this snapshot:", "Milestone " + new Date().toLocaleTimeString());
-    if (!name) return;
-
-    const snapshots = JSON.parse(localStorage.getItem('fr_builder_snapshots') || '[]');
-    snapshots.push({
-        id: Date.now(),
-        name: name,
-        html: UI.editors.html.value,
-        css: UI.editors.css.value,
-        js: UI.editors.js.value
+// 3. REPAIR ENGINE
+function runRepair(silent = false) {
+    let fixes = [];
+    let html = UI.editors.html.value;
+    
+    // Simple tag repair
+    const tags = ['div', 'section', 'span', 'p', 'header', 'footer'];
+    tags.forEach(tag => {
+        const opened = (html.match(new RegExp('<'+tag, 'g')) || []).length;
+        const closed = (html.match(new RegExp('</'+tag+'>', 'g')) || []).length;
+        if(opened > closed) {
+            html += `</${tag}>`.repeat(opened - closed);
+            fixes.push(`Closed ${opened-closed} ${tag} tags`);
+        }
     });
-    localStorage.setItem('fr_builder_snapshots', JSON.stringify(snapshots));
-    renderSnapshots();
-    logAction(`Snapshot created: ${name}`);
-}
 
-function loadData() {
-    UI.editors.html.value = localStorage.getItem('fr_builder_html') || '\n<div class="hero"><h1>FieldBuilder</h1></div>';
-    UI.editors.css.value = localStorage.getItem('fr_builder_css') || 'body { background: #020408; color: #00f2ff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }';
-    UI.editors.js.value = localStorage.getItem('fr_builder_js') || 'console.log("Ready.");';
-    renderSnapshots();
-}
-
-// MODES
-function toggleSandbox() {
-    if (!state.isSandbox) {
-        if (confirm("Enter Sandbox Mode? Edits won't affect your main draft.")) {
-            state.isSandbox = true;
-            document.body.classList.add('sandbox-active');
-            document.getElementById('toggle-sandbox').textContent = 'SANDBOX ON';
-            document.getElementById('toggle-sandbox').classList.add('active');
-            logAction('Entered Sandbox Mode');
-        }
-    } else {
-        const choice = confirm("Exit Sandbox? OK to Promote to Draft, Cancel to Discard.");
-        if (choice) {
-            saveDraft(); // Saves sandbox values to main draft
-            logAction('Sandbox promoted to draft');
-        }
-        state.isSandbox = false;
-        document.body.classList.remove('sandbox-active');
-        document.getElementById('toggle-sandbox').textContent = 'SANDBOX OFF';
-        document.getElementById('toggle-sandbox').classList.remove('active');
-        loadData();
+    if(fixes.length > 0) {
+        UI.editors.html.value = html;
+        updatePreview();
+        logEvent(`Repair: ${fixes.join(', ')}`);
+        if(!silent) alert("Repaired: " + fixes.join(", "));
     }
 }
 
-function toggleLock() {
-    state.isLocked = !state.isLocked;
-    const btn = document.getElementById('toggle-lock');
-    btn.textContent = state.isLocked ? 'LOCKED' : 'EDITING';
-    btn.classList.toggle('active', state.isLocked);
-    Object.values(UI.editors).forEach(ed => ed.disabled = state.isLocked);
-    logAction(state.isLocked ? 'Editors locked' : 'Editors unlocked');
+// 4. GLOBAL COPY SYSTEM
+async function copyProject(type = 'all') {
+    let text = '';
+    if(type === 'all') {
+        text = `<!DOCTYPE html><html><head><style>${UI.editors.css.value}</style></head><body>${UI.editors.html.value}<script>${UI.editors.js.value}<\/script></body></html>`;
+    } else {
+        text = UI.editors[type].value;
+    }
+    await navigator.clipboard.writeText(text);
+    logEvent(`Copied ${type} to clipboard`);
+    showGuide("Code copied!");
 }
 
-// UI HELPERS
-function setStatus(text) {
-    UI.status.textContent = text;
+// 5. UI LOGIC
+function setupUI() {
+    // Curtains
+    document.querySelectorAll('.curtain-trigger').forEach(btn => {
+        btn.onclick = () => {
+            const p = btn.parentElement;
+            const active = p.classList.contains('active');
+            document.querySelectorAll('.curtain').forEach(c => c.classList.remove('active'));
+            if(!active) p.classList.add('active');
+        };
+    });
+
+    // Editors
+    ['html', 'css', 'js'].forEach(lang => {
+        UI.editors[lang].oninput = () => {
+            updateLineNumbers(lang);
+            debounceSave();
+            updatePreview();
+        };
+        updateLineNumbers(lang);
+    });
+
+    // Preview
+    document.getElementById('preview-drag-handle').onclick = () => {
+        UI.sheet.classList.toggle('collapsed');
+        document.querySelector('.pull-text').textContent = UI.sheet.classList.contains('collapsed') ? 'PULL TO EXPAND' : 'PULL TO HIDE';
+    };
+
+    document.getElementById('btn-focus-mode').onclick = () => {
+        UI.sheet.classList.add('full');
+    };
+
+    document.getElementById('btn-close-preview').onclick = () => {
+        UI.sheet.classList.add('collapsed');
+        UI.sheet.classList.remove('full');
+    };
+
+    // Actions
+    document.getElementById('btn-copy-all').onclick = () => copyProject('all');
+    document.getElementById('btn-repair-quick').onclick = () => runRepair();
+    document.getElementById('toggle-sandbox').onclick = toggleSandbox;
+    document.getElementById('btn-save-stable-quick').onclick = saveStable;
+    
+    // Search
+    document.getElementById('global-search').oninput = (e) => runSearch(e.target.value);
 }
 
-function logAction(msg) {
+function updateLineNumbers(lang) {
+    const lines = UI.editors[lang].value.split('\n').length;
+    UI.lines[lang].innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('<br>');
+}
+
+function logEvent(msg) {
     const entry = document.createElement('div');
-    entry.className = 'log-entry';
     entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
     UI.history.prepend(entry);
 }
 
-function expandPreview() {
-    UI.previewSheet.classList.remove('collapsed');
-    state.currentPreviewState = 'expanded';
-    document.querySelector('.pull-text').textContent = 'PULL TO HIDE';
+function showGuide(msg) {
+    UI.guide.textContent = msg;
+    UI.guide.classList.remove('hidden');
+    setTimeout(() => UI.guide.classList.add('hidden'), 3000);
 }
 
-function collapsePreview() {
-    UI.previewSheet.classList.add('collapsed');
-    UI.previewSheet.classList.remove('full');
-    UI.master.classList.remove('hidden');
-    state.currentPreviewState = 'collapsed';
-    document.querySelector('.pull-text').textContent = 'PULL TO EXPAND';
+function toggleSandbox() {
+    state.sandbox = !state.sandbox;
+    const btn = document.getElementById('toggle-sandbox');
+    btn.classList.toggle('active', state.sandbox);
+    logEvent(state.sandbox ? "Entered Sandbox" : "Exit Sandbox");
+    showGuide(state.sandbox ? "Sandbox Active: Edits isolated" : "Sandbox Closed");
 }
 
-function toggleFocusMode() {
-    UI.previewSheet.classList.add('full');
-    UI.master.classList.add('hidden');
-    state.currentPreviewState = 'full';
+function saveStable() {
+    const bundle = {
+        h: UI.editors.html.value,
+        c: UI.editors.css.value,
+        j: UI.editors.js.value,
+        t: Date.now()
+    };
+    localStorage.setItem('fr_builder_stable', JSON.stringify(bundle));
+    logEvent("Stable baseline saved");
+    showGuide("Stable baseline updated");
 }
 
-// EXPORT
-async function exportZip() {
-    const zip = new JSZip();
-    zip.file("index.html", UI.editors.html.value);
-    zip.file("style.css", UI.editors.css.value);
-    zip.file("script.js", UI.editors.js.value);
-    
-    const content = await zip.generateAsync({type:"blob"});
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(content);
-    link.download = "fieldbuilder_project.zip";
-    link.click();
-    logAction('Project exported as ZIP');
+function runSearch(query) {
+    const results = document.getElementById('search-results');
+    results.innerHTML = '';
+    if(!query) return;
+
+    ['html', 'css', 'js'].forEach(lang => {
+        const lines = UI.editors[lang].value.split('\n');
+        lines.forEach((line, i) => {
+            if(line.includes(query)) {
+                const div = document.createElement('div');
+                div.className = 'search-item';
+                div.innerHTML = `<span class="line">${lang.toUpperCase()} L${i+1}</span> ${line.substring(0, 30)}...`;
+                div.onclick = () => jumpToCode(lang, i);
+                results.appendChild(div);
+            }
+        });
+    });
 }
 
-// SNAPSHOT RENDERING
-function renderSnapshots() {
-    const list = document.getElementById('snapshot-list');
-    const snaps = JSON.parse(localStorage.getItem('fr_builder_snapshots') || '[]');
-    list.innerHTML = snaps.map(s => `
-        <div class="snapshot-item" onclick="restoreSnapshot(${s.id})">
-            <span>${s.name}</span>
-            <small>${new Date(s.id).toLocaleDateString()}</small>
-        </div>
-    `).join('');
+function jumpToCode(lang, line) {
+    document.querySelectorAll('.curtain').forEach(c => c.classList.remove('active'));
+    document.querySelector(`[data-section="${lang}"]`).classList.add('active');
+    UI.editors[lang].focus();
+    const lineheight = 20.8; // Approx
+    UI.editors[lang].scrollTop = line * lineheight;
 }
 
-function restoreSnapshot(id) {
-    if (!confirm("Restore this snapshot? Current unsaved changes will be lost.")) return;
-    const snaps = JSON.parse(localStorage.getItem('fr_builder_snapshots') || '[]');
-    const snap = snaps.find(s => s.id === id);
-    if (snap) {
-        UI.editors.html.value = snap.html;
-        UI.editors.css.value = snap.css;
-        UI.editors.js.value = snap.js;
-        updatePreview();
-        saveDraft();
-        logAction(`Restored snapshot: ${snap.name}`);
-    }
-}
-
-// AI MOCK
-function simulateAI() {
-    const prompt = document.getElementById('ai-prompt').value;
-    if (!prompt) return;
-    setStatus('AI GENERATING...');
-    logAction(`AI Prompt sent: ${prompt}`);
-    
-    setTimeout(() => {
-        UI.editors.html.value += `\n\n<div class="card"><h3>${prompt}</h3></div>`;
-        updatePreview();
-        saveDraft();
-        setStatus('DRAFT SAVED');
-    }, 1500);
-}
-
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+    UI.editors.html.value = localStorage.getItem('fr_builder_html') || '<h1>FieldBuilder</h1>';
+    UI.editors.css.value = localStorage.getItem('fr_builder_css') || 'body { font-family: sans-serif; padding: 20px; }';
+    UI.editors.js.value = localStorage.getItem('fr_builder_js') || 'console.log("System Ready");';
+    setupUI();
+    updatePreview();
+});
